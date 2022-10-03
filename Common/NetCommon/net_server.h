@@ -132,11 +132,6 @@ namespace tps
             }
 
         public:
-//            virtual bool on_first_message(std::shared_ptr<connection<T>>, message<T>&)
-//            {
-//                return true;
-//            }
-
             virtual void on_client_disconnect(std::shared_ptr<connection<T>>)
             {
 

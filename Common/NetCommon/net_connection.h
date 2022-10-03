@@ -42,7 +42,6 @@ namespace tps
                     {
                         m_id = uid;
 
-//                        read_first_hdr();
                         read_header();
                     }
                 }
@@ -212,71 +211,7 @@ namespace tps
 
                 read_header();
             }
-/*
-            // ASYNC
-            void read_first_hdr()
-            {
-                asio::async_read(m_socket, asio::buffer(&m_msgTempIn.hdr, sizeof(message_header<T>)),
-                    [this](const std::error_code& ec, std::size_t)
-                    {
-                        if (!ec)
-                        {
-                            if (m_msgTempIn.hdr.size > 0)
-                            {
-                                m_msgTempIn.body.resize(m_msgTempIn.hdr.size);
-                                read_first_body();
-                            }
-                            else
-                            {
-                                if (m_server->on_first_message(this->shared_from_this(), m_msgTempIn))
-                                    add_to_incoming_message_queue();
-                                else
-                                {
-                                    std::cout << "[" << m_id << "] Invalid First Msg Received\n";
-                                    m_socket.shutdown(asio::ip::tcp::socket::shutdown_both);
-                                    m_socket.close();
-                                    m_server->delete_client(this->shared_from_this());
-                                }
-                            }
-                        }
-                        else
-                        {
-                            std::cout << "[" << m_id << "] Read First Header Fail: " << ec.message() << "\n";
-                            m_socket.shutdown(asio::ip::tcp::socket::shutdown_both);
-                            m_socket.close();
-                            m_server->delete_client(this->shared_from_this());
-                        }
-                    });
-            }
 
-            // ASYNC
-            void read_first_body()
-            {
-                asio::async_read(m_socket, asio::buffer(m_msgTempIn.body.data(), m_msgTempIn.body.size()),
-                    [this](const std::error_code& ec, std::size_t)
-                    {
-                        if (!ec)
-                        {
-                            if (m_server->on_first_message(this->shared_from_this(), m_msgTempIn))
-                                add_to_incoming_message_queue();
-                            else
-                            {
-                                std::cout << "[" << m_id << "] Invalid First Msg Received\n";
-                                m_socket.shutdown(asio::ip::tcp::socket::shutdown_both);
-                                m_socket.close();
-                                m_server->delete_client(this->shared_from_this());
-                            }
-                        }
-                        else
-                        {
-                            std::cout << "[" << m_id << "] Read First Body Fail\n";
-                            m_socket.shutdown(asio::ip::tcp::socket::shutdown_both);
-                            m_socket.close();
-                            m_server->delete_client(this->shared_from_this());
-                        }
-                    });
-            }
-*/
         private:
             asio::ip::tcp::socket m_socket;
 

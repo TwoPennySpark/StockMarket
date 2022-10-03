@@ -8,12 +8,6 @@ std::unique_ptr<sm_packet> sm_packet::create(tps::net::message<packet_type>& msg
 
     switch (packet_type(type))
     {
-//        case SM_CONNECT:
-//            ret = create<sm_connect>(type);
-//            break;
-//        case SM_CONNACK:
-//            ret = create<sm_connack>(type);
-//            break;
         case SM_PUBLISH:
             ret = create<sm_publish>(type);
             break;
@@ -59,50 +53,9 @@ void sm_packet::unpack(tps::net::message<packet_type> &)
 
 }
 
-//void sm_connect::pack(tps::net::message<packet_type> &msg) const
-//{
-//    uint16_t clientNameLen = ID.size();
-//    uint16_t clientPasswordLen = password.size();
-
-//    msg.hdr.id = type;
-//    msg.hdr.size = clientNameLen + clientPasswordLen;
-
-//    msg << clientNameLen;
-//    msg << ID;
-
-//    msg << clientPasswordLen;
-//    msg << password;
-//}
-
-//void sm_connect::unpack(tps::net::message<packet_type>& msg)
-//{
-//    uint16_t clientNameLen = 0;
-//    msg >> clientNameLen;
-//    ID.resize(clientNameLen);
-//    msg >> ID;
-
-//    uint16_t clientPasswordLen = 0;
-//    msg >> clientPasswordLen;
-//    password.resize(clientPasswordLen);
-//    msg >> password;
-//}
-
-//void sm_connack::pack(tps::net::message<packet_type>& msg) const
-//{
-//    msg.hdr.id = type;
-//    msg.hdr.size = sizeof(rc);
-//    msg << rc;
-//}
-
-//void sm_connack::unpack(tps::net::message<packet_type>& msg)
-//{
-//    msg >> rc;
-//}
-
 void sm_publish::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-//    msg.hdr.size = sizeof(currency_type)*2 + sizeof(offerType) + sizeof(volume) + sizeof(price);
     msg << volumeCur << priceCur;
     msg << offerType << volume << price;
 }
@@ -116,8 +69,6 @@ void sm_publish::unpack(tps::net::message<packet_type>& msg)
 void sm_req_balance::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-//    msg.hdr.size = sizeof(currency_type) * vCur.size();
-
     for (auto cur: vCur)
         msg << cur;
 }
@@ -134,23 +85,20 @@ void sm_req_balance::unpack(tps::net::message<packet_type>& msg)
 void sm_req_balance_ack::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-//    msg.hdr.size = sizeof(uint16_t) * vBalance.size();
-    for (auto amount: vBalance)
-        msg << amount;
+    for (auto [cur, amount]: vBalance)
+        msg << cur << amount;
 }
 
 void sm_req_balance_ack::unpack(tps::net::message<packet_type>& msg)
 {
-    vBalance.resize(msg.hdr.size / sizeof(uint16_t));
-    for (auto& amount: vBalance)
-        msg >> amount;
+    vBalance.resize(msg.hdr.size / (sizeof(currency_type) + sizeof(int64_t)));
+    for (auto& [cur, amount]: vBalance)
+        msg >> cur >> amount;
 }
 
 void sm_req_offs::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-//    msg.hdr.size = sizeof(currency_type)*2;
-
     msg << volumeCur << priceCur;
 }
 
@@ -162,8 +110,6 @@ void sm_req_offs::unpack(tps::net::message<packet_type>& msg)
 void sm_req_offs_ack::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-//    msg.hdr.size = sizeof(currency_type)*2 + vOffs.size() *
-//                   (sizeof(offer_type) + sizeof(uint16_t) * 2);
     for (auto [type, volume, price]: vOffs)
         msg << type << volume << price;
 }
@@ -173,7 +119,7 @@ void sm_req_offs_ack::unpack(tps::net::message<packet_type>& msg)
     msg >> volumeCur >> priceCur;
 
     uint32_t nOffs = (msg.hdr.size - sizeof(currency_type) * 2) /
-                     (sizeof(uint8_t) + sizeof(uint16_t) * 2);
+                     (sizeof(uint8_t) + sizeof(uint32_t) * 2);
     vOffs.resize(nOffs);
     for (auto& [type, volume, price]: vOffs)
         msg >> type >> volume >> price;

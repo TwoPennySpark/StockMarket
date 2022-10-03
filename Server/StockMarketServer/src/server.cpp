@@ -19,13 +19,6 @@ void SMServer::on_client_disconnect(pConnection client)
                             {std::move(client), std::move(msg)}));
 }
 
-//bool SMServer::on_first_message(pConnection netClient, tps::net::message<packet_type> &msg)
-//{
-//    if (msg.hdr.id == SM_CONNECT)
-//        return true;
-//    return false;
-//}
-
 void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> &msg)
 {
     auto newPkt = sm_packet::create(msg);
@@ -36,8 +29,7 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
     if (type == SM_CONNECT)
     {
         std::cout << "\n\t{CONNECT}\n";
-//        handle_connect(netClient, dynamic_cast<sm_connect&>(*newPkt));
-        m_core.add_new_client(netClient);
+        m_core.add_client(netClient);
         return;
     }
 
@@ -49,43 +41,95 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
     switch (type)
     {
         case SM_PUBLISH:
-        {
-
+            std::cout << "\n\t{PUBLISH OFFS REQUEST}\n";
+            handle_publish_off(client, dynamic_cast<sm_publish&>(*newPkt));
             break;
-        }
+        case SM_REQ_BALANCE:
+            std::cout << "\n\t{BALANCE REQUEST}\n";
+            handle_balance_req(client, dynamic_cast<sm_req_balance&>(*newPkt));
+            break;
+        case SM_REQ_CLIENT_ACTIVE_OFFS:
+            std::cout << "\n\t{ACTIVE OFFS REQUEST}\n";
+            handle_active_offs_req(client, dynamic_cast<sm_req_offs&>(*newPkt));
+            break;
+        case SM_REQ_ALL_ACTIVE_OFFS:
+            std::cout << "\n\t{ALL ACTIVE OFFS REQUEST}\n";
+            handle_all_offs_req(client, dynamic_cast<sm_req_offs&>(*newPkt));
+            break;
+        case SM_REQ_PAST_OFFS:
+            std::cout << "\n\t{PAST OFFS REQUEST}\n";
+            handle_past_offs_req(client, dynamic_cast<sm_req_offs&>(*newPkt));
+            break;
+        case SM_ERROR:
+            std::cout << "\n\t{ERROR}\n";
+            m_core.delete_client(netClient);
+            break;
+        case SM_REQ_BALANCE_ACK:
+        case SM_OFFS_ACK:
+        default:
+            std::cout << "\n\t{UNEXPECTED TYPE}: "<< type << "\n";
+            break;
     }
 }
 
-//void SMServer::handle_connect(pConnection &netClient, sm_connect &pkt)
-//{
-//    pClient client;
+void SMServer::handle_publish_off(pClient &client, sm_publish &pkt)
+{
+    offer_t newOffer(client, pkt);
+    m_core.add_offer(newOffer);
+}
 
-//    sm_connack connack;
-//    connack.rc = SM_RC_OK;
+void SMServer::handle_balance_req(pClient &client, sm_req_balance &pkt)
+{
+    sm_req_balance_ack ack;
 
-//    // if client with such ID already exists
-//    if (auto res = m_core.find_client(pkt.ID))
-//    {
-//        auto& existingClient = res.value().get();
+    for (auto cur: pkt.vCur)
+    {
+        auto it = client->hBalance.find(cur);
+        if (it != client->hBalance.end())
+            ack.vBalance.emplace_back(cur, it->second);
+    }
 
-//        // if client is currently connected
-//        if (existingClient->netClient)
-//            connack.rc = SM_RC_USER_ALREADY_LOGINED;
-//        else
-//        {
-//            if (existingClient->password != pkt.password)
-//                connack.rc = SM_RC_WRONG_PASSWORD;
-//            else
-//                existingClient->netClient = netClient;
-//        }
-//    }
-//    else
-//        client = m_core.add_new_client(pkt.ID, netClient);
+    tps::net::message<packet_type> reply;
+    ack.pack(reply);
+    client->netClient->send(reply);
+}
 
-//    tps::net::message<packet_type> reply;
-//    connack.pack(reply);
-//    netClient->send(reply);
+void SMServer::handle_active_offs_req(pClient &client, sm_req_offs &pkt)
+{
 
-//    if (connack.rc)
-//        netClient->disconnect();
-//}
+}
+
+void SMServer::handle_all_offs_req(pClient &client, sm_req_offs &pkt)
+{
+    sm_req_offs_ack ack;
+    ack.volumeCur = pkt.volumeCur;
+    ack.priceCur = pkt.priceCur;
+
+    auto res = m_core.get_all_offers(pkt.volumeCur, pkt.priceCur);
+    for (auto& offer: res)
+        ack.vOffs.emplace_back(offer.type, offer.volume, offer.price);
+
+    tps::net::message<packet_type> reply;
+    ack.pack(reply);
+    client->netClient->send(reply);
+}
+
+void SMServer::handle_past_offs_req(pClient &client, sm_req_offs &pkt)
+{
+    sm_req_offs_ack ack;
+    ack.volumeCur = pkt.volumeCur;
+    ack.priceCur = pkt.priceCur;
+
+    auto res = m_core.get_client_past_offers(pkt.volumeCur, pkt.priceCur, client);
+    for (auto& offer: res)
+        ack.vOffs.emplace_back(offer.type, offer.volume, offer.price);
+
+    tps::net::message<packet_type> reply;
+    ack.pack(reply);
+    client->netClient->send(reply);
+}
+
+void SMServer::handle_error(pClient &client)
+{
+    m_core.delete_client(client->netClient);
+}
