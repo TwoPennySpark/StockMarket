@@ -57,13 +57,13 @@ void sm_publish::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
     msg << volumeCur << priceCur;
-    msg << offerType << volume << price;
+    msg << offerSide << volume << price;
 }
 
 void sm_publish::unpack(tps::net::message<packet_type>& msg)
 {
     msg >> volumeCur >> priceCur;
-    msg >> offerType >> volume >> price;
+    msg >> offerSide >> volume >> price;
 }
 
 void sm_req_balance::pack(tps::net::message<packet_type>& msg) const
@@ -110,17 +110,19 @@ void sm_req_offs::unpack(tps::net::message<packet_type>& msg)
 void sm_req_offs_ack::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
-    for (auto [type, volume, price]: vOffs)
-        msg << type << volume << price;
+
+    msg << volumeCur << priceCur;
+    for (auto [side, volume, price]: vOffs)
+        msg << side << volume << price;
 }
 
 void sm_req_offs_ack::unpack(tps::net::message<packet_type>& msg)
 {
     msg >> volumeCur >> priceCur;
 
-    uint32_t nOffs = (msg.hdr.size - sizeof(currency_type) * 2) /
-                     (sizeof(uint8_t) + sizeof(uint32_t) * 2);
-    vOffs.resize(nOffs);
-    for (auto& [type, volume, price]: vOffs)
-        msg >> type >> volume >> price;
+    uint32_t nOffs = msg.hdr.size / (sizeof(uint8_t) + sizeof(uint32_t) * 2);
+    if (nOffs)
+        vOffs.resize(nOffs);
+    for (auto& [side, volume, price]: vOffs)
+        msg >> side >> volume >> price;
 }

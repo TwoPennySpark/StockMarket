@@ -7,6 +7,7 @@
 enum packet_type: uint8_t
 {
     SM_CONNECT, //
+    SM_CONNACK,
     SM_PUBLISH, //
     SM_REQ_BALANCE, //
     SM_REQ_BALANCE_ACK,
@@ -23,7 +24,7 @@ enum currency_type: uint8_t
     SM_CUR_RUB
 };
 
-enum offer_type { SM_BUY, SM_SELL };
+enum offer_side: uint8_t { SM_BUY, SM_SELL };
 
 namespace tps::net {template <typename T> struct message;}
 
@@ -51,7 +52,7 @@ struct sm_publish: public sm_packet
     sm_publish(packet_type type = SM_PUBLISH): sm_packet(type){}
 
     currency_type volumeCur, priceCur;
-    offer_type offerType;
+    offer_side offerSide;
     uint32_t volume, price;
 
     void pack(tps::net::message<packet_type>&) const;
@@ -92,9 +93,11 @@ struct sm_req_offs: public sm_packet
 struct sm_req_offs_ack: public sm_packet
 {
     sm_req_offs_ack(packet_type type = SM_OFFS_ACK): sm_packet(type){}
+    sm_req_offs_ack(packet_type type, currency_type _volumeCur, currency_type _priceCur):
+        sm_packet(type), volumeCur(_volumeCur), priceCur(_priceCur) {}
 
     currency_type volumeCur, priceCur;
-    std::vector<std::tuple<offer_type, uint32_t, uint32_t>> vOffs;
+    std::vector<std::tuple<offer_side, uint32_t, uint32_t>> vOffs;
 
     void pack(tps::net::message<packet_type>&) const;
     void unpack(tps::net::message<packet_type>&);

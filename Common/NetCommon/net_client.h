@@ -36,7 +36,6 @@ namespace tps
 
                     m_connection = std::make_unique<connection<T>>(connection<T>::owner::client, nullptr, m_context,
                                                                    asio::ip::tcp::socket(m_context), m_qMessageIn);
-
                     m_connection->connect_to_server(endpoints);
 
                     thrContext = std::thread([this](){m_context.run();});
@@ -50,10 +49,7 @@ namespace tps
 
             void disconnect()
             {
-                if (is_connected())
-                {
-                    m_connection->disconnect();
-                }
+                m_connection->disconnect();
 
                 m_context.stop();
                 if (thrContext.joinable())
@@ -64,17 +60,13 @@ namespace tps
 
             bool is_connected()
             {
-                if (m_connection->is_connected())
-                    return true;
-                else
-                    return false;
+                return (m_connection->is_connected()) ? true : false;
             }
 
             template <typename Type>
             void send(Type&& msg)
             {
-                if (is_connected())
-                    m_connection->send(std::forward<Type>(msg));
+                m_connection->send(std::forward<Type>(msg));
             }
 
             tsqueue<owned_message<T>>& incoming()
@@ -93,7 +85,6 @@ namespace tps
 
         private:
             tsqueue<owned_message<T>> m_qMessageIn;
-
         };
     }
 }

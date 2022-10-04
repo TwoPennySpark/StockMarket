@@ -57,7 +57,10 @@ namespace tps
                         if (!ec)
                             read_header();
                         else
+                        {
                             std::cout << "[-]Failed to connect to server\n";
+                            disconnect();
+                        }
                     });
                 }
             }

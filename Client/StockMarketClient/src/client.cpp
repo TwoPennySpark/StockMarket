@@ -7,10 +7,11 @@ void SMClient::send_pkt(sm_packet &pkt)
     send(std::move(msg));
 }
 
-void SMClient::publish_new_offer(offer_type type, currency_type volumeCur, currency_type priceCur, uint32_t volume, uint32_t price)
+void SMClient::publish_new_offer(offer_side side, currency_type volumeCur, currency_type priceCur,
+                                 uint32_t volume, uint32_t price)
 {
     sm_publish pub;
-    pub.offerType = type;
+    pub.offerSide = side;
     pub.volumeCur = volumeCur;
     pub.priceCur = priceCur;
     pub.volume = volume;

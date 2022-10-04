@@ -11,6 +11,9 @@ public:
     SMServer(uint16_t port): server_interface(port) {}
     ~SMServer() override {}
 
+    void send_reply(pConnection& netClient, sm_packet& reply);
+
+    void handle_connect         (pConnection& netClient);
     void handle_publish_off     (pClient& client, sm_publish& pkt);
     void handle_balance_req     (pClient& client, sm_req_balance& pkt);
     void handle_active_offs_req (pClient& client, sm_req_offs& pkt);
@@ -26,7 +29,7 @@ protected:
                             tps::net::message<packet_type>& msg) override;
 
 private:
-    core_t m_core;
+    Core m_core;
 };
 
 #endif

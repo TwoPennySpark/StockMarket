@@ -1,4 +1,5 @@
 #include "server.h"
+#include "offer_filter.h"
 
 bool SMServer::on_client_connect(pConnection client)
 {
@@ -29,7 +30,7 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
     if (type == SM_CONNECT)
     {
         std::cout << "\n\t{CONNECT}\n";
-        m_core.add_client(netClient);
+        handle_connect(netClient);
         return;
     }
 
@@ -62,7 +63,7 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
             break;
         case SM_ERROR:
             std::cout << "\n\t{ERROR}\n";
-            m_core.delete_client(netClient);
+            handle_error(client);
             break;
         case SM_REQ_BALANCE_ACK:
         case SM_OFFS_ACK:
@@ -70,6 +71,21 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
             std::cout << "\n\t{UNEXPECTED TYPE}: "<< type << "\n";
             break;
     }
+}
+
+void SMServer::send_reply(pConnection &netClient, sm_packet &reply)
+{
+    tps::net::message<packet_type> msg;
+    reply.pack(msg);
+    netClient->send(std::move(msg));
+}
+
+void SMServer::handle_connect(pConnection &netClient)
+{
+    m_core.add_client(netClient);
+
+    sm_packet ack(SM_CONNACK);
+    send_reply(netClient, ack);
 }
 
 void SMServer::handle_publish_off(pClient &client, sm_publish &pkt)
@@ -89,47 +105,47 @@ void SMServer::handle_balance_req(pClient &client, sm_req_balance &pkt)
             ack.vBalance.emplace_back(cur, it->second);
     }
 
-    tps::net::message<packet_type> reply;
-    ack.pack(reply);
-    client->netClient->send(reply);
+    send_reply(client->netClient, ack);
 }
 
 void SMServer::handle_active_offs_req(pClient &client, sm_req_offs &pkt)
 {
+    sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
+    OfferCurrencyFilter curFilter(pkt.volumeCur, pkt.priceCur);
+    OfferClientFilter clientFilter(*client);
+    curFilter.SetNext(&clientFilter);
+
+    auto offers = m_core.get_offers(curFilter);
+    for (auto& offer: offers)
+        ack.vOffs.emplace_back(offer->side, offer->volume, offer->price);
+
+    send_reply(client->netClient, ack);
 }
 
 void SMServer::handle_all_offs_req(pClient &client, sm_req_offs &pkt)
 {
-    sm_req_offs_ack ack;
-    ack.volumeCur = pkt.volumeCur;
-    ack.priceCur = pkt.priceCur;
+    sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
-    auto res = m_core.get_all_offers(pkt.volumeCur, pkt.priceCur);
-    for (auto& offer: res)
-        ack.vOffs.emplace_back(offer.type, offer.volume, offer.price);
+    OfferCurrencyFilter curFilter(pkt.volumeCur, pkt.priceCur);
+    auto offers = m_core.get_offers(curFilter);
+    for (auto& offer: offers)
+        ack.vOffs.emplace_back(offer->side, offer->volume, offer->price);
 
-    tps::net::message<packet_type> reply;
-    ack.pack(reply);
-    client->netClient->send(reply);
+    send_reply(client->netClient, ack);
 }
 
 void SMServer::handle_past_offs_req(pClient &client, sm_req_offs &pkt)
 {
-    sm_req_offs_ack ack;
-    ack.volumeCur = pkt.volumeCur;
-    ack.priceCur = pkt.priceCur;
+    sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
-    auto res = m_core.get_client_past_offers(pkt.volumeCur, pkt.priceCur, client);
-    for (auto& offer: res)
-        ack.vOffs.emplace_back(offer.type, offer.volume, offer.price);
+    for (auto& offer: client->vPastOffers)
+        ack.vOffs.emplace_back(offer.side, offer.volume, offer.price);
 
-    tps::net::message<packet_type> reply;
-    ack.pack(reply);
-    client->netClient->send(reply);
+    send_reply(client->netClient, ack);
 }
 
 void SMServer::handle_error(pClient &client)
 {
-    m_core.delete_client(client->netClient);
+    m_core.del_client(client);
 }
