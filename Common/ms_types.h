@@ -4,14 +4,21 @@
 #include <memory>
 #include <vector>
 
+const uint16_t MAX_VOLUME = std::numeric_limits<uint16_t>::max();
+const uint16_t MAX_PRICE  = std::numeric_limits<uint16_t>::max();
+const int64_t MIN_BALANCE = std::numeric_limits<int32_t>::min();
+const int64_t MAX_BALANCE = std::numeric_limits<int32_t>::max();
+
 enum packet_type: uint8_t
 {
-    SM_CONNECT, //
+    SM_CONNECT,
     SM_CONNACK,
-    SM_PUBLISH, //
-    SM_REQ_BALANCE, //
+    SM_PUBLISH,
+    SM_PUBLISH_ACK,
+    SM_PUBLISH_REJECTED_ACK,
+    SM_REQ_BALANCE,
     SM_REQ_BALANCE_ACK,
-    SM_REQ_CLIENT_ACTIVE_OFFS, //
+    SM_REQ_CLIENT_ACTIVE_OFFS,
     SM_REQ_ALL_ACTIVE_OFFS,
     SM_REQ_PAST_OFFS,
     SM_OFFS_ACK,

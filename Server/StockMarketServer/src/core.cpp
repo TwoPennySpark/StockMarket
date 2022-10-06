@@ -1,13 +1,36 @@
 #include "core.h"
 #include "offer_filter.h"
 
-bool operator< (const std::list<offer>::iterator& lhs,
-                const std::list<offer>::iterator& rhs)
+bool operator< (const listIt& lhs, const listIt& rhs)
 {
     return lhs->price < rhs->price;
 }
 
-std::optional<std::reference_wrapper<pClient>> Core::find_client(pConnection &netClient)
+bool operator> (const listIt& lhs, const listIt& rhs)
+{
+    return lhs->price > rhs->price;
+}
+
+std::vector<listIt> Core::get_offers(const OfferFilter& filter)
+{
+    std::vector<listIt> res;
+    for (auto it = m_lActiveOffers.begin(); it != m_lActiveOffers.end(); it++)
+        if (filter.handle(*it))
+            res.emplace_back(it);
+    return res;
+}
+
+auto Core::get_offers_sorted_by_price(const OfferFilter& filter,
+                                      const std::function<bool(listIt, listIt)> cmp)
+{
+    std::multiset<listIt, decltype(cmp)> res(cmp);
+    for (auto it = m_lActiveOffers.begin(); it != m_lActiveOffers.end(); it++)
+        if (filter.handle(*it))
+            res.emplace(it);
+    return res;
+}
+
+std::optional<std::reference_wrapper<pClient>> Core::find_client(pConnection& netClient)
 {
     auto it = m_hClients.find(netClient);
     if (it != m_hClients.end())
@@ -16,13 +39,14 @@ std::optional<std::reference_wrapper<pClient>> Core::find_client(pConnection &ne
     return std::nullopt;
 }
 
-void Core::add_client(pConnection &netClient)
+void Core::add_client(pConnection& netClient)
 {
     m_hClients.emplace(netClient, std::make_shared<client_t>(netClient));
 }
 
-void Core::del_client(pClient &client)
+void Core::del_client(pClient& client)
 {
+    // find offers that belong to client and delete them
     OfferClientFilter filter(*client);
     auto offers = get_offers(filter);
     for (auto& offer: offers)
@@ -31,100 +55,83 @@ void Core::del_client(pClient &client)
     m_hClients.erase(client->netClient);
 }
 
-void Core::add_offer(offer_t &newOffer)
+bool Core::add_offer(offer_t& newOffer)
 {
+    if (!newOffer.volume || !newOffer.price)
+        return false;
+
+    auto isSelling = (newOffer.side == SM_SELL);
+
+    // make sure that new offer's completion won't exceed client's balance cap
+    auto priceCurBalance = newOffer.rClient.hBalance[newOffer.priceCur];
+    auto volumeCurBalance = newOffer.rClient.hBalance[newOffer.volumeCur];
+    if (isSelling)
+    {
+        if (volumeCurBalance - int64_t(newOffer.volume) < MIN_BALANCE ||
+            priceCurBalance  + int64_t(newOffer.volume) * int64_t(newOffer.price) > MAX_BALANCE)
+            return false;
+    }
+    else
+    {
+        if (volumeCurBalance + int64_t(newOffer.volume) > MAX_BALANCE ||
+            priceCurBalance  - int64_t(newOffer.volume) * int64_t(newOffer.price) < MIN_BALANCE)
+            return false;
+    }
+
     // get all offers with certain currency pair and offer side
     OfferCurrencyFilter curFilter(newOffer.volumeCur, newOffer.priceCur);
     OfferSideFilter sideFilter((newOffer.side == SM_BUY) ? SM_SELL : SM_BUY);
     curFilter.SetNext(&sideFilter);
-    auto offers = get_offers_sorted_by_price(curFilter);
+    // sort buying  offers by prices in decreasing order when selling and
+    // sort selling offers by prices in increasing order when buying
+    auto offers = isSelling ? get_offers_sorted_by_price(curFilter, std::greater<listIt>()) :
+                              get_offers_sorted_by_price(curFilter, std::less<listIt>());
 
-    bool bExectuted = false;
-    if (newOffer.side == SM_SELL)
+    bool bCompleted = false;
+    auto it = offers.begin();
+    // iterate through offers with opposite side
+    while (it != offers.end())
     {
-        auto& sellOffer = newOffer;
+        // if prices do not cross each other
+        if ((isSelling && (*it)->price < newOffer.price) ||
+           (!isSelling && (*it)->price > newOffer.price))
+            break;
 
-        auto it = offers.rbegin();
-        while (it != offers.rend() && (*it)->price >= newOffer.price)
+        auto& offer = **it;
+        auto isGreater = offer.volume < newOffer.volume;
+        auto isLess = offer.volume > newOffer.volume;
+
+        // match offers with overlapping prices
+        match_offers(newOffer, offer);
+
+        if (isGreater)
         {
-            auto& buyOffer = **it;
-            auto isGreater = buyOffer.volume < sellOffer.volume;
-            auto isLess = buyOffer.volume > sellOffer.volume;
-
-            match_offers(sellOffer, buyOffer);
-
-            if (isGreater)
-            {
-                m_lActiveOffers.erase(*it);
-            }
-            else if (isLess)
-            {
-                bExectuted = true;
-                break;
-            }
-            else
-            {
-                m_lActiveOffers.erase(*it);
-                bExectuted = true;
-                break;
-            }
-            it++;
+            // erase offer from active list if it's fully completed
+            m_lActiveOffers.erase(*it);
         }
-    }
-    else
-    {
-        auto& buyOffer = newOffer;
-
-        auto it = offers.begin();
-        while (it != offers.end() && (*it)->price <= newOffer.price)
+        else if (isLess)
         {
-            auto& sellOffer = **it;
-            auto isGreater = buyOffer.volume > sellOffer.volume;
-            auto isLess = buyOffer.volume < sellOffer.volume;
-
-            match_offers(sellOffer, buyOffer);
-
-            if (isGreater)
-            {
-                m_lActiveOffers.erase(*it);
-            }
-            else if (isLess)
-            {
-                bExectuted = true;
-                break;
-            }
-            else
-            {
-                m_lActiveOffers.erase(*it);
-                bExectuted = true;
-                break;
-            }
-            it++;
+            bCompleted = true;
+            break;
         }
+        else
+        {
+            // erase offer from active list if it's fully completed
+            m_lActiveOffers.erase(*it);
+            bCompleted = true;
+            break;
+        }
+
+        it++;
     }
-    if (!bExectuted)
+    // if there is still volume to sell/buy - add new offer to active offers list
+    if (!bCompleted)
         m_lActiveOffers.emplace_back(std::move(newOffer));
+
+    return true;
 }
 
-std::vector<std::list<offer_t>::iterator> Core::get_offers(OfferFilter &filter)
-{
-    std::vector<std::list<offer_t>::iterator> res;
-    for (auto it = m_lActiveOffers.begin(); it != m_lActiveOffers.end(); it++)
-        if (filter.handle(*it))
-            res.emplace_back(it);
-    return res;
-}
-
-std::multiset<std::list<offer_t>::iterator> Core::get_offers_sorted_by_price(OfferFilter &filter)
-{
-    std::multiset<std::list<offer_t>::iterator> res;
-    for (auto it = m_lActiveOffers.begin(); it != m_lActiveOffers.end(); it++)
-        if (filter.handle(*it))
-            res.emplace(it);
-    return res;
-}
-
-void Core::match_offers(offer_t& lhs, offer_t& rhs)
+void Core::match_offers(offer_t& lhs, offer_t& rhs) const
 {
     if (lhs.side == rhs.side)
         return;
@@ -140,6 +147,7 @@ void Core::match_offers(offer_t& lhs, offer_t& rhs)
     auto& seller = sellOffer.rClient;
     auto& buyer = buyOffer.rClient;
 
+    // modify each client's balance
     auto exchangeVolume = (sellOffer.volume >= buyOffer.volume) ? buyOffer.volume : sellOffer.volume;
     seller.hBalance[volumeCur] -= exchangeVolume;
     seller.hBalance[priceCur]  += exchangeVolume * buyOffer.price;
@@ -148,6 +156,7 @@ void Core::match_offers(offer_t& lhs, offer_t& rhs)
 
     if (sellOffer.volume > buyOffer.volume)
     {
+        // add partial deal to client's history
         offer_t partialDeal(sellOffer);
         partialDeal.volume = exchangeVolume;
         partialDeal.price = buyOffer.price;
@@ -155,21 +164,25 @@ void Core::match_offers(offer_t& lhs, offer_t& rhs)
 
         sellOffer.volume -= buyOffer.volume;
 
+        // add fully completed deal to client's history
         buyer.vPastOffers.emplace_back(std::move(buyOffer));
     }
     else if (sellOffer.volume < buyOffer.volume)
     {
+        // add partial deal to client's history
         offer_t partialDeal(buyOffer);
         partialDeal.volume = exchangeVolume;
         buyer.vPastOffers.emplace_back(std::move(partialDeal));
 
         buyOffer.volume -= sellOffer.volume;
 
+        // add fully completed deal to client's history
         sellOffer.price = buyOffer.price;
         seller.vPastOffers.emplace_back(std::move(sellOffer));
     }
     else
     {
+        // two offers complete each other fully - add both to history
         sellOffer.price = buyOffer.price;
         seller.vPastOffers.emplace_back(std::move(sellOffer));
         buyer.vPastOffers.emplace_back(std::move(buyOffer));

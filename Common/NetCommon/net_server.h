@@ -115,7 +115,6 @@ namespace tps
 
             void delete_client(std::shared_ptr<connection<T>> client)
             {
-                std::cout << "NETWORK DELETE CLIENT\n";
                 m_deqConnections.erase(
                             std::remove(m_deqConnections.begin(), m_deqConnections.end(), client), m_deqConnections.end());
             }

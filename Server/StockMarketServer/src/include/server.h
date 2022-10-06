@@ -2,7 +2,6 @@
 #define SERVER_H
 
 #include "net_server.h"
-#include "ms_types.h"
 #include "core.h"
 
 class SMServer: public tps::net::server_interface<packet_type>

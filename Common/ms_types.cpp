@@ -6,7 +6,7 @@ std::unique_ptr<sm_packet> sm_packet::create(tps::net::message<packet_type>& msg
     std::unique_ptr<sm_packet> ret;
     packet_type type = msg.hdr.id;
 
-    switch (packet_type(type))
+    switch (type)
     {
         case SM_PUBLISH:
             ret = create<sm_publish>(type);
@@ -23,7 +23,7 @@ std::unique_ptr<sm_packet> sm_packet::create(tps::net::message<packet_type>& msg
             ret = create<sm_req_offs>(type);
             break;
         case SM_OFFS_ACK:
-            ret = create<sm_req_offs>(type);
+            ret = create<sm_req_offs_ack>(type);
             break;
         default:
             ret = create<sm_packet>(type);
@@ -36,19 +36,19 @@ std::unique_ptr<sm_packet> sm_packet::create(tps::net::message<packet_type>& msg
         ret = nullptr;
     }
 
-    if (msg.data_left_to_pop())
+    if (msg.size())
         ret = nullptr;
 
     return ret;
 }
 
-void sm_packet::pack(tps::net::message<packet_type> &msg) const
+void sm_packet::pack(tps::net::message<packet_type>& msg) const
 {
     msg.hdr.id = type;
     msg.hdr.size = 0;
 }
 
-void sm_packet::unpack(tps::net::message<packet_type> &)
+void sm_packet::unpack(tps::net::message<packet_type>&)
 {
 
 }

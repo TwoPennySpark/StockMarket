@@ -20,7 +20,7 @@ void SMServer::on_client_disconnect(pConnection client)
                             {std::move(client), std::move(msg)}));
 }
 
-void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> &msg)
+void SMServer::on_message(pConnection netClient, tps::net::message<packet_type>& msg)
 {
     auto newPkt = sm_packet::create(msg);
     if (!newPkt)
@@ -50,7 +50,7 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
             handle_balance_req(client, dynamic_cast<sm_req_balance&>(*newPkt));
             break;
         case SM_REQ_CLIENT_ACTIVE_OFFS:
-            std::cout << "\n\t{ACTIVE OFFS REQUEST}\n";
+            std::cout << "\n\t{CLIENT's ACTIVE OFFS REQUEST}\n";
             handle_active_offs_req(client, dynamic_cast<sm_req_offs&>(*newPkt));
             break;
         case SM_REQ_ALL_ACTIVE_OFFS:
@@ -62,25 +62,23 @@ void SMServer::on_message(pConnection netClient, tps::net::message<packet_type> 
             handle_past_offs_req(client, dynamic_cast<sm_req_offs&>(*newPkt));
             break;
         case SM_ERROR:
-            std::cout << "\n\t{ERROR}\n";
+            std::cout << "\n\t{CLIENT DISCONNECT}\n";
             handle_error(client);
             break;
-        case SM_REQ_BALANCE_ACK:
-        case SM_OFFS_ACK:
         default:
             std::cout << "\n\t{UNEXPECTED TYPE}: "<< type << "\n";
             break;
     }
 }
 
-void SMServer::send_reply(pConnection &netClient, sm_packet &reply)
+void SMServer::send_reply(pConnection& netClient, sm_packet& reply)
 {
     tps::net::message<packet_type> msg;
     reply.pack(msg);
     netClient->send(std::move(msg));
 }
 
-void SMServer::handle_connect(pConnection &netClient)
+void SMServer::handle_connect(pConnection& netClient)
 {
     m_core.add_client(netClient);
 
@@ -88,13 +86,18 @@ void SMServer::handle_connect(pConnection &netClient)
     send_reply(netClient, ack);
 }
 
-void SMServer::handle_publish_off(pClient &client, sm_publish &pkt)
+void SMServer::handle_publish_off(pClient& client, sm_publish& pkt)
 {
-    offer_t newOffer(client, pkt);
-    m_core.add_offer(newOffer);
+    offer_t newOffer(pkt.offerSide, pkt.volumeCur, pkt.priceCur,
+                     pkt.volume, pkt.price, client);
+
+    auto replyType = m_core.add_offer(newOffer) ? SM_PUBLISH_ACK : SM_PUBLISH_REJECTED_ACK;
+
+    sm_packet ack(replyType);
+    send_reply(client->netClient, ack);
 }
 
-void SMServer::handle_balance_req(pClient &client, sm_req_balance &pkt)
+void SMServer::handle_balance_req(pClient& client, sm_req_balance& pkt)
 {
     sm_req_balance_ack ack;
 
@@ -108,7 +111,7 @@ void SMServer::handle_balance_req(pClient &client, sm_req_balance &pkt)
     send_reply(client->netClient, ack);
 }
 
-void SMServer::handle_active_offs_req(pClient &client, sm_req_offs &pkt)
+void SMServer::handle_active_offs_req(pClient& client, sm_req_offs& pkt)
 {
     sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
@@ -123,7 +126,7 @@ void SMServer::handle_active_offs_req(pClient &client, sm_req_offs &pkt)
     send_reply(client->netClient, ack);
 }
 
-void SMServer::handle_all_offs_req(pClient &client, sm_req_offs &pkt)
+void SMServer::handle_all_offs_req(pClient& client, sm_req_offs& pkt)
 {
     sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
@@ -135,7 +138,7 @@ void SMServer::handle_all_offs_req(pClient &client, sm_req_offs &pkt)
     send_reply(client->netClient, ack);
 }
 
-void SMServer::handle_past_offs_req(pClient &client, sm_req_offs &pkt)
+void SMServer::handle_past_offs_req(pClient& client, sm_req_offs& pkt)
 {
     sm_req_offs_ack ack(SM_OFFS_ACK, pkt.volumeCur, pkt.priceCur);
 
@@ -145,7 +148,7 @@ void SMServer::handle_past_offs_req(pClient &client, sm_req_offs &pkt)
     send_reply(client->netClient, ack);
 }
 
-void SMServer::handle_error(pClient &client)
+void SMServer::handle_error(pClient& client)
 {
     m_core.del_client(client);
 }

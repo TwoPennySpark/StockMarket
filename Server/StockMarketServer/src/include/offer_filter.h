@@ -12,7 +12,7 @@ public:
         return handler;
     }
 
-    virtual bool handle(offer_t& offer)
+    virtual bool handle(const offer_t& offer) const
     {
         if (nextHandler)
             return nextHandler->handle(offer);
@@ -27,7 +27,7 @@ class OfferCurrencyFilter: public OfferFilter
 public:
     OfferCurrencyFilter(currency_type _volume, currency_type _price): volume(_volume), price(_price) {}
 
-    bool handle(offer_t& offer)
+    bool handle(const offer_t& offer) const override
     {
         if (offer.volumeCur == volume && offer.priceCur == price)
             return OfferFilter::handle(offer);
@@ -43,7 +43,7 @@ class OfferClientFilter: public OfferFilter
 public:
     OfferClientFilter(client_t& _client): rClient(_client){}
 
-    bool handle(offer_t& offer)
+    bool handle(const offer_t& offer) const override
     {
         if (&offer.rClient == &rClient)
             return OfferFilter::handle(offer);
@@ -59,7 +59,7 @@ class OfferSideFilter: public OfferFilter
 public:
     OfferSideFilter(offer_side _side): side(_side){}
 
-    bool handle(offer_t& offer)
+    bool handle(const offer_t& offer) const override
     {
         if (offer.side == side)
             return OfferFilter::handle(offer);

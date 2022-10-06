@@ -25,7 +25,7 @@ namespace tps
 
             size_t size() const
             {
-                return body.size();
+                return hdr.size;
             }
 
             // PUSH
@@ -121,11 +121,6 @@ namespace tps
                     m_start = m_end = 0;
 
                 return *this;
-            }
-
-            uint32_t data_left_to_pop()
-            {
-                return body.size() - m_start;
             }
 
         private:
