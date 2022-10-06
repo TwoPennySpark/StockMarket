@@ -12,8 +12,8 @@ void show_menu()
                  "* 3 followed by pair of integers - USD volume and price in RUB - to publish SELL offer( 3 <volume> <price> )\n"
                  "Example: 3 50 61 (an order to sell 50 USD at a price of 61 RUB/USD)\n\n"
                  "* 4 to see your balance\n\n"
-                 "* 5 to show your active offers\n\n"
-                 "* 6 to show your completed offers\n\n"
+                 "* 5 to see your active offers\n\n"
+                 "* 6 to see your completed offers\n\n"
                  "================================================================================\n\n";
 }
 
@@ -162,7 +162,7 @@ int main(int argc, char** argv)
                 case SM_PUBLISH_ACK:
                     break;
                 case SM_PUBLISH_REJECTED_ACK:
-                    std::cout << "[-]SERVER REJECTED YOUR OFFER\nPossible casuse: offer completion exceeds balance cap\n";
+                    std::cout << "[-]SERVER REJECTED YOUR OFFER\nPossible cause: offer completion exceeds balance cap\n";
                     break;
                 case SM_REQ_BALANCE_ACK:
                 {
